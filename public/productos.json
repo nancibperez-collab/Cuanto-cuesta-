@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "codigo_barras": "7790310985113",
+    "nombre": "3D QUESO 43 GR",
+    "precio": 1700
+  },
+  {
+    "id": 2,
+    "codigo_barras": "7791813444411",
+    "nombre": "7UP 1.5CC",
+    "precio": 3500
+  },
+  {
+    "id": 3,
+    "codigo_barras": "7791813777403",
+    "nombre": "7UP 2L",
+    "precio": 3900
+  },
+  {
+    "id": 4,
+    "codigo_barras": "7791813444381",
+    "nombre": "7UP 500ML",
+    "precio": 1600
+  },
+  {
+    "id": 5,
+    "codigo_barras": "7792200000036",
+    "nombre": "9 DE ORO AGRIDULCE 100 GR",
+    "precio": 700
+  }
+]
