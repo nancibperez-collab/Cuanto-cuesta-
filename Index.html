@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Escáner de Precios Alta Sensibilidad</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #eef2f5; color: #333; }
+    h1 { font-size: 24px; color: #2c3e50; margin-bottom: 10px; }
+    p.instrucciones { color: #7f8c8d; margin-bottom: 25px; font-size: 14px; }
+    .btn-escanear { background-color: #27ae60; color: white; border: none; padding: 18px 35px; font-size: 18px; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.2s; -webkit-tap-highlight-color: transparent; }
+    .btn-escanear:active { background-color: #219150; transform: translateY(1px); }
+    #interactive.viewport { width: 100%; max-width: 480px; height: 320px; margin: 0 auto; overflow: hidden; position: relative; border: 4px solid #27ae60; border-radius: 12px; display: none; background-color: black; box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
+    #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+    /* Estilos para el visor de escaneo */
+    #interactive.viewport canvas.drawingBuffer { position: absolute; left: 0; top: 0; }
+    #interactive.viewport .scan-region-highlight { position: absolute; left: 10%; top: 20%; width: 80%; height: 60%; border: 2px solid rgba(39, 174, 96, 0.7); border-radius: 8px; box-sizing: border-box; display: none; pointer-events: none; }
+    .resultado { margin-top: 25px; padding: 20px; background-color: white; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); max-width: 480px; margin-left: auto; margin-right: auto; display: none; }
+    .label-codigo { font-size: 12px; color: #95a5a6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+    #codigoLeido { font-size: 16px; font-weight: bold; color: #34495e; }
+    #nombreProducto { font-size: 22px; color: #2c3e50; margin: 15px 0 10px 0; font-weight: 600; }
+    .precio { font-size: 36px; color: #27ae60; font-weight: 800; background-color: #eafaf1; padding: 10px; border-radius: 8px; display: inline-block; margin-top: 5px; }
+    @media (max-width: 480px) { h1 { font-size: 20px; } .btn-escanear { padding: 15px 25px; font-size: 16px; } #interactive.viewport { height: 280px; } .precio { font-size: 30px; } }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+</head>
+<body>
+
+  <h1>Consulta de Precios</h1>
+  <p class="instrucciones">Presiona el botón, enfoca el código de barras y espera un momento.</p>
+  
+  <button class="btn-escanear" id="btnIniciar" onclick="iniciarEscaner()">📷 Escanear Producto</button>
+
+  <div id="interactive" class="viewport">
+    <div class="scan-region-highlight"></div>
+  </div>
+
+  <div class="resultado" id="contenedorResultado">
+    <div class="label-codigo">Código detectado: <span id="codigoLeido">-</span></div>
+    <h2 id="nombreProducto">Buscando...</h2>
+    <div class="precio" id="precioProducto">-</div>
+  </div>
+
+  <script>
+    const productos = {
+      "7791234567890": { nombre: "Leche Entera 1L", precio: "$1.500,00" },
+      "7790000111122": { nombre: "Aceite de Girasol 900ml", precio: "$2.800,50" },
+      "7798765432109": { nombre: "Azúcar Común 1kg", precio: "$1.100,00" }
+    };
+
+    function iniciarEscaner() {
+      document.getElementById('contenedorResultado').style.display = 'none';
+      document.getElementById('interactive').style.display = 'block';
+      document.getElementById('btnIniciar').style.display = 'none';
+      document.querySelector('.scan-region-highlight').style.display = 'block';
+
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector('#interactive'),
+          constraints: {
+            facingMode: "environment", // Cámara trasera
+            aspectRatio: { min: 1, max: 2 },
+            focusMode: "continuous" // AJUSTE 1: Forzar enfoque continuo si el navegador lo soporta
+          },
+        },
+        // AJUSTE 2: Hacer el localizador más sensible y preciso
+        locate: true, 
+        locator: {
+            patchSize: "medium", // Tamaño de búsqueda mediano (mejor equilibrio velocidad/precisión)
+            halfSample: true    // Procesa la mitad de los píxeles (más rápido)
+        },
+        numOfWorkers: (navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4), // Usa todos los núcleos del CPU
+        decoder: {
+          // AJUSTE 3: Limitar solo a los formatos más comunes (EAN y Code 128) para ganar velocidad
+          readers: ["ean_reader", "ean_8_reader", "code_128_reader"],
+          multiple: false // Detenerse al encontrar el primer código válido
+        }
+      }, function(err) {
+          if (err) {
+              alert("Error al abrir la cámara. Asegúrate de dar permisos de cámara y usar HTTPS.\n\nDetalle: " + err);
+              document.getElementById('interactive').style.display = 'none';
+              document.getElementById('btnIniciar').style.display = 'inline-block';
+              return;
+          }
+          Quagga.start();
+      });
+
+      var detectCount = 0;
+      var lastResult = null;
+
+      Quagga.onDetected(function(result) {
+          var code = result.codeResult.code;
+          
+          // AJUSTE 4: Verificación para evitar falsos positivos
+          if (lastResult === code) {
+              detectCount++;
+          } else {
+              detectCount = 0;
+              lastResult = code;
+          }
+
+          // Esperar a que el mismo código se detecte 3 veces seguidas antes de aceptarlo
+          if (detectCount < 3) { return; }
+
+          Quagga.stop();
+          document.getElementById('interactive').style.display = 'none';
+          document.getElementById('btnIniciar').style.display = 'inline-block';
+          document.getElementById('btnIniciar').innerText = "📷 Escanear otro";
+          document.querySelector('.scan-region-highlight').style.display = 'none';
+
+          detectCount = 0;
+          lastResult = null;
+
+          mostrarProducto(code);
+      });
+    }
+
+    function mostrarProducto(codigo) {
+      document.getElementById('contenedorResultado').style.display = 'block';
+      document.getElementById('codigoLeido').innerText = codigo;
+
+      if (productos[codigo]) {
+        document.getElementById('nombreProducto').innerText = productos[codigo].nombre;
+        document.getElementById('precioProducto').innerText = productos[codigo].precio;
+      } else {
+        document.getElementById('nombreProducto').innerText = "Producto no encontrado";
+        document.getElementById('precioProducto').innerText = "-";
+      }
+    }
+  </script>
+</body>
+</html>
